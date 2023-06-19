@@ -1,13 +1,20 @@
 import asyncio
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientConnectionError
 from datetime import datetime, timedelta
-import pprint 
+from prettytable import PrettyTable
 
 
 def get_currency_info(data, currency):
+    print(f"\nCurrency: {currency}")
+    table = PrettyTable()
+    table.field_names = ["Date", "Sale", "Purchase"]
     for day in data:
-        currency_data = list(filter(lambda x: x['currency'] == currency, day['exchangeRate']))[0]
-        print(f"Date: {day['date']}, Sale: {currency_data['saleRate']} UAH, Purchase: {currency_data['purchaseRate']} UAH")
+        currency_data = list(
+            filter(lambda x: x['currency'] == currency, day['exchangeRate']))[0]
+        table.add_row([day['date'], currency_data['saleRate'],
+                      currency_data['purchaseRate']])
+
+    print(table)
 
 
 def format_date(date):
@@ -29,32 +36,60 @@ def get_dates_list(period):
     return dates_list
 
 
-async def fetch_currencies(session, dates):
-    data = []
-    for date in dates:
-        url = f'https://api.privatbank.ua/p24api/exchange_rates?json&date={date}'
+async def fetch_currency(session, date):
+    url = f'https://api.privatbank.ua/p24api/exchange_rates?json&date={date}'
+    try:
         async with session.get(url) as response:
-            result = await response.json()
-            data.append(result)
+            if response.status == 200:
+                result = await response.json()
+                return result
+            else:
+                print(f"Error status: {response.status} for {url}")
+    except ClientConnectionError as err:
+        print(f'Connection error: {url}', str(err))
+
+
+async def fetch_currencies(session, dates):
+    tasks = []
+    for date in dates:
+        task = asyncio.create_task(fetch_currency(session, date))
+        tasks.append(task)
+    data = await asyncio.gather(*tasks)
     return data
+
 
 def parse_instructions(command):
     args = command.split(" ")
+    if len(args) < 3:
+        for i in range(0, 3-len(args)):
+            args.append(None)
+    if args[1]:
+        args[1] = args[1].upper()
     return args
 
 
 async def main():
-    async with ClientSession() as session:
-        instructions = input("Enter your command >>> ")
-        command, currency, period = parse_instructions(instructions)
-        if command == "exchange":
-            dates = get_dates_list(period)
-            print("...Fetching data")
-            data = await fetch_currencies(session, dates)
-            get_currency_info(data, currency)
-       
+    while True:
+        async with ClientSession() as session:
+            instructions = input("Enter your command >>> ")
+            command, currency, period = parse_instructions(instructions)
+            if currency and currency not in ['USD','EUR','CHF','GBP','PLN']:
+                print(f"Currency '{currency}' is not exchangable in PrivatBank")
+                continue
+            if command == "exchange":
+                if not currency and not period or not command:
+                    print("Please enter all arguments: 'exchange <currency> <period(days)>'")
+                else:
+                    dates = get_dates_list(period)
+                    print("...Fetching data")
+                    data = await fetch_currencies(session, dates)
+                    get_currency_info(data, currency)
+            if command == "close":
+                print("See you Later")
+                break
+            if command not in ["exchange", "close"]:
+                print("Please enter a correct command: exchange | close")
 
-
+                
 if __name__ == "__main__":
     asyncio.run(main())
-   
