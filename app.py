@@ -80,7 +80,7 @@ async def main():
                 print(f"Currency '{currency}' is not exchangable in PrivatBank")
                 continue
             if command == "exchange":
-                if not currency and not period or not command or not period:
+                if not currency and not period or not period:
                     print("Please enter all arguments: 'exchange <currency> <period(days)>'")
                 if period and period > 10:
                     print("You can get rates for last 10 days maximum")
