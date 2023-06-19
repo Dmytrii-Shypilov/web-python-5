@@ -65,6 +65,8 @@ def parse_instructions(command):
             args.append(None)
     if args[1]:
         args[1] = args[1].upper()
+    if args[2]:
+         args[2] = int(args[2])
     return args
 
 
@@ -73,13 +75,17 @@ async def main():
         async with ClientSession() as session:
             instructions = input("Enter your command >>> ")
             command, currency, period = parse_instructions(instructions)
+           
             if currency and currency not in ['USD','EUR','CHF','GBP','PLN']:
                 print(f"Currency '{currency}' is not exchangable in PrivatBank")
                 continue
             if command == "exchange":
-                if not currency and not period or not command:
+                if not currency and not period or not command or not period:
                     print("Please enter all arguments: 'exchange <currency> <period(days)>'")
-                else:
+                if period and period > 10:
+                    print("You can get rates for last 10 days maximum")
+                    continue
+                if command and currency and period:
                     dates = get_dates_list(period)
                     print("...Fetching data")
                     data = await fetch_currencies(session, dates)
@@ -90,6 +96,6 @@ async def main():
             if command not in ["exchange", "close"]:
                 print("Please enter a correct command: exchange | close")
 
-                
+
 if __name__ == "__main__":
     asyncio.run(main())
